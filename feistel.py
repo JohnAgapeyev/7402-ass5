@@ -71,8 +71,16 @@ def easy_subkey(master):
 def medium_subkey(master):
     k = []
     for i in range(round_count):
-        x = bytearray([a ^ b for (a,b) in zip(master, [i]*16)])
-        k.append(x);
+        tmp_master = master
+        for j in range(len(tmp_master)):
+            random.Random(j).shuffle(tmp_master)
+            tmp_master[j] = rotate_byte(tmp_master[j], tmp_master[i] % 8)
+            tmp_master[j] = tmp_master[j] ^ 0xc3
+            random.Random(j).shuffle(tmp_master)
+            tmp_master[j] = rotate_byte(tmp_master[len(tmp_master) - j - 1], random.Random(sum(tmp_master)).getrandbits(3))
+            tmp_master[j] = (tmp_master[j] + (i * 176)) & 0xff
+        random.Random(i).shuffle(tmp_master)
+        k.append(bytearray(tmp_master));
     return k
 
 def hard_subkey(master):
@@ -91,7 +99,7 @@ def process_block(B, rounds, subkeys):
     L, R = B[:8], B[8:]
     for j in rounds:
         L, R = round(j, subkeys[j], L, R)
-    return R + L
+    return bytearray(R + L)
 
 def ecb_encrypt(plain, subkeys):
     #i is block num
@@ -115,7 +123,6 @@ def ecb_decrypt(plain, subkeys):
         B = process_block(B, reversed(range(round_count)), subkeys)
         #Write the block back
         plain[start_block : end_block] = B
-    print(plain)
     plain = pkcs7_strip(plain)
     return plain
 
@@ -170,7 +177,7 @@ def ctr_encrypt(plain, subkeys):
         iv_block = bytearray((iv + i).to_bytes(16, sys.byteorder))
         encrypted_block = process_block(iv_block, range(round_count), subkeys)
         #Xor the ciphertext in
-        B = [a ^ b for (a,b) in zip(B, encrypted_block)]
+        B = bytearray([a ^ b for (a,b) in zip(B, encrypted_block)])
         #Write the block back
         plain[start_block : end_block] = B
     return plain
@@ -186,9 +193,9 @@ def ctr_decrypt(plain, subkeys):
         #Grab the block
         B = plain[start_block : end_block]
         iv_block = bytearray((iv + i).to_bytes(16, sys.byteorder))
-        encrypted_block = process_block(iv_block, reversed(range(round_count)), subkeys)
+        encrypted_block = process_block(iv_block, range(round_count), subkeys)
         #Xor the ciphertext in
-        B = [a ^ b for (a,b) in zip(B, encrypted_block)]
+        B = bytearray([a ^ b for (a,b) in zip(B, encrypted_block)])
         #Write the block back
         plain[start_block : end_block] = B
     plain = pkcs7_strip(plain)
@@ -207,17 +214,17 @@ if __name__ == '__main__':
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
-        P = ecb_encrypt(P, k);
+        #P = ecb_encrypt(P, k);
         #P = cbc_encrypt(P, k);
-        #P = ctr_encrypt(P, k);
+        P = ctr_encrypt(P, k);
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
     else:
         P = bytearray(open(sys.argv[2], 'rb').read())
         if len(P) % 16 != 0:
             raise ValueError('Ciphertext is not a valid length, it must be corrupted')
-        P = ecb_decrypt(P, k)
+        #P = ecb_decrypt(P, k)
         #P = cbc_decrypt(P, k)
-        #P = ctr_decrypt(P, k)
+        P = ctr_decrypt(P, k)
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
