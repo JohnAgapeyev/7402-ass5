@@ -2,6 +2,7 @@
 
 import sys
 import secrets
+import random
 
 from Crypto.Cipher import AES
 
@@ -23,12 +24,27 @@ def easy(i, k, x):
         x[j] = (x[j] << k[i]) & 0xff
     return x
 
-#This is solidly amateur
+def rotate_byte(x, n):
+    return ((x << n) | (x >> (8 - n))) & 0xff;
+
+#This is solidly amateur, but I obviously lack the capability to analyze/break it
 def medium(i, k, x):
     x = bytearray(x)
+    random.Random(i).shuffle(x)
+    #Since I know this will be 8 bytes, I can use it for bitslicing majority function
     for j in range(len(x)):
-        x[j] = (x[j] * i) & 0xff
-        x[j] = (x[j] << k[i]) & 0xff
+        for n in range(8):
+            count = 0
+            for elem in x:
+                count += (elem & (1 << j)) != 0
+            x[j] ^= (-(count >= 0) ^ x[j]) & (1 << n)
+        x[j] = (x[j] + x[i]) & 0xff
+        x[j] = rotate_byte(x[j], i)
+        x[j] = x[j] ^ k[j]
+        x[j] = rotate_byte(x[j], 3)
+        x[j] = (x[j] + k[j+8]) & 0xff
+        random.Random(j).shuffle(x)
+    random.Random(-i).shuffle(x)
     return x
 
 #This is actually secure, just a waste of time
@@ -36,7 +52,7 @@ def hard(i, k, x):
     return bytearray(AES.new(k, AES.MODE_CTR, nonce=bytes([i])*8).encrypt(bytearray(x)))
 
 def round(i, k, L, R):
-    return R, [a ^ b for (a,b) in zip(L, hard(i, k, R))]
+    return R, [a ^ b for (a,b) in zip(L, medium(i, k, R))]
 
 def process_block(B, rounds, subkeys):
     #Split the block
