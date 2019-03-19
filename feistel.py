@@ -95,14 +95,18 @@ def cbc_decrypt(plain, subkeys):
     return plain[16:]
 
 def ctr_encrypt(plain, subkeys):
-    iv = bytearray(secrets.randbits(128).to_bytes(16, sys.byteorder))
+    iv = secrets.randbits(128)
+    plain = bytearray(iv.to_bytes(16, sys.byteorder)) + plain
     #i is block num
-    for i in range(len(plain) // 16):
+    for i in range(1, len(plain) // 16):
         start_block = i * 16
         end_block = start_block + 16
         #Grab the block
         B = plain[start_block : end_block]
-        B = process_block(B, range(round_count), subkeys)
+        iv_block = bytearray((iv + i).to_bytes(16, sys.byteorder))
+        encrypted_block = process_block(iv_block, range(round_count), subkeys)
+        #Xor the ciphertext in
+        B = [a ^ b for (a,b) in zip(B, encrypted_block)]
         #Write the block back
         plain[start_block : end_block] = B
     return plain
@@ -110,19 +114,21 @@ def ctr_encrypt(plain, subkeys):
 def ctr_decrypt(plain, subkeys):
     if len(plain) < 32:
         raise ValueError('Input is not padded or does not contain an IV')
-    iv = plain[:16]
-    plain = plain[16:]
+    iv = int.from_bytes(plain[:16], byteorder=sys.byteorder, signed=False)
     #i is block num
-    for i in range(len(plain) // 16):
+    for i in range(1, len(plain) // 16):
         start_block = i * 16
         end_block = start_block + 16
         #Grab the block
         B = plain[start_block : end_block]
-        B = process_block(B, reversed(range(round_count)), subkeys[::-1])
+        iv_block = bytearray((iv + i).to_bytes(16, sys.byteorder))
+        encrypted_block = process_block(iv_block, reversed(range(round_count)), subkeys[::-1])
+        #Xor the ciphertext in
+        B = [a ^ b for (a,b) in zip(B, encrypted_block)]
         #Write the block back
         plain[start_block : end_block] = B
     plain = pkcs7_strip(plain)
-    return plain
+    return plain[16:]
 
 # Args are [mode] [input filename] [output filename]
 # mode is 'e' for encrypt, else decrypt
@@ -142,7 +148,8 @@ if __name__ == '__main__':
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
         #P = ecb_encrypt(P, k);
-        P = cbc_encrypt(P, k);
+        #P = cbc_encrypt(P, k);
+        P = ctr_encrypt(P, k);
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
     else:
@@ -150,6 +157,7 @@ if __name__ == '__main__':
         if len(P) % 16 != 0:
             raise ValueError('Ciphertext is not a valid length, it must be corrupted')
         #P = ecb_decrypt(P, k)
-        P = cbc_decrypt(P, k)
+        #P = cbc_decrypt(P, k)
+        P = ctr_decrypt(P, k)
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
