@@ -91,8 +91,11 @@ def hard_subkey(master):
         k.append(bytearray(h.digest()[:16]))
     return k
 
+subkey_generator = hard_subkey
+round_function = hard
+
 def round(i, k, L, R):
-    return R, [a ^ b for (a,b) in zip(L, hard(i, k, R))]
+    return R, [a ^ b for (a,b) in zip(L, round_function(i, k, R))]
 
 def process_block(B, rounds, subkeys):
     #Split the block
@@ -201,30 +204,49 @@ def ctr_decrypt(plain, subkeys):
     plain = pkcs7_strip(plain)
     return plain[16:]
 
-# Args are [mode] [input filename] [output filename]
-# mode is 'e' for encrypt, else decrypt
+encrypt_function = ctr_encrypt
+decrypt_function = ctr_decrypt
+
+# Args are [function] [mode] [quality] [input filename] [output filename]
+# function is 'e' for encrypt, 'd' for decrypt
+# mode is 'ecb' for ecb, 'cbc' for cbc, and 'ctr' for ctr
+# quality is 'e' for easy, 'm' for medium, 'h' for hard
 if __name__ == '__main__':
-    if len(sys.argv[1:]) != 3:
+    if len(sys.argv[1:]) != 5:
         print("give me args!")
         sys.exit(1)
 
-    #k = easy_subkey(K)
-    #k = medium_subkey(K)
-    k = hard_subkey(K)
+    if sys.argv[2] == "ecb":
+        encrypt_function = ecb_encrypt
+        decrypt_function = ecb_decrypt
+    elif sys.argv[2] == "cbc":
+        encrypt_function = cbc_encrypt
+        decrypt_function = cbc_decrypt
+    elif sys.argv[2] == "ctr":
+        encrypt_function = ctr_encrypt
+        decrypt_function = ctr_decrypt
+
+    if sys.argv[3] == 'e':
+        subkey_generator = easy_subkey
+        round_function = easy
+    elif sys.argv[3] == 'm':
+        subkey_generator = medium_subkey
+        round_function = medium
+    elif sys.argv[3] == 'h':
+        subkey_generator = hard_subkey
+        round_function = hard
+
+    k = subkey_generator(K)
 
     if sys.argv[1] == 'e':
-        P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
-        #P = ecb_encrypt(P, k);
-        #P = cbc_encrypt(P, k);
-        P = ctr_encrypt(P, k);
-        with open(sys.argv[3], 'wb') as out:
+        P = pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read()))
+        P = encrypt_function(P, k);
+        with open(sys.argv[5], 'wb') as out:
             out.write(P)
     else:
-        P = bytearray(open(sys.argv[2], 'rb').read())
+        P = bytearray(open(sys.argv[4], 'rb').read())
         if len(P) % 16 != 0:
             raise ValueError('Ciphertext is not a valid length, it must be corrupted')
-        #P = ecb_decrypt(P, k)
-        #P = cbc_decrypt(P, k)
-        P = ctr_decrypt(P, k)
-        with open(sys.argv[3], 'wb') as out:
+        P = decrypt_function(P, k)
+        with open(sys.argv[5], 'wb') as out:
             out.write(P)
