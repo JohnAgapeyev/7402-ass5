@@ -5,6 +5,8 @@ import secrets
 import random
 
 from Crypto.Cipher import AES
+from Crypto.Hash import HMAC
+from Crypto.Hash import SHA256
 
 round_count = 8
 
@@ -76,8 +78,9 @@ def medium_subkey(master):
 def hard_subkey(master):
     k = []
     for i in range(round_count):
-        x = bytearray([a ^ b for (a,b) in zip(master, [i]*16)])
-        k.append(x);
+        h = HMAC.new(master, digestmod=SHA256)
+        h.update(bytearray([i]*16))
+        k.append(bytearray(h.digest()[:16]))
     return k
 
 def round(i, k, L, R):
@@ -198,7 +201,9 @@ if __name__ == '__main__':
         print("give me args!")
         sys.exit(1)
 
-    k = easy_subkey(K)
+    #k = easy_subkey(K)
+    #k = medium_subkey(K)
+    k = hard_subkey(K)
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
