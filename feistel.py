@@ -6,6 +6,12 @@ import random
 
 from Crypto.Cipher import AES
 
+round_count = 8
+
+#Master secret key
+#Keeping it fixed for simplicity, and to avoid having to pad/KDF the thing
+K = bytearray("yellow submarine", 'utf8')
+
 def pkcs7_pad(x):
     padding = 16 - ((len(x) % 16 != 0) * (len(x) % 16))
     return x + bytes([padding]) * padding
@@ -53,8 +59,29 @@ def medium(i, k, x):
 def hard(i, k, x):
     return bytearray(AES.new(k, AES.MODE_CTR, nonce=bytes([i])*8).encrypt(bytearray(x)))
 
+def easy_subkey(master):
+    k = []
+    for i in range(round_count):
+        x = bytearray([a ^ b for (a,b) in zip(master, [i]*16)])
+        k.append(x);
+    return k
+
+def medium_subkey(master):
+    k = []
+    for i in range(round_count):
+        x = bytearray([a ^ b for (a,b) in zip(master, [i]*16)])
+        k.append(x);
+    return k
+
+def hard_subkey(master):
+    k = []
+    for i in range(round_count):
+        x = bytearray([a ^ b for (a,b) in zip(master, [i]*16)])
+        k.append(x);
+    return k
+
 def round(i, k, L, R):
-    return R, [a ^ b for (a,b) in zip(L, medium(i, k, R))]
+    return R, [a ^ b for (a,b) in zip(L, hard(i, k, R))]
 
 def process_block(B, rounds, subkeys):
     #Split the block
@@ -82,9 +109,10 @@ def ecb_decrypt(plain, subkeys):
         end_block = start_block + 16
         #Grab the block
         B = plain[start_block : end_block]
-        B = process_block(B, reversed(range(round_count)), subkeys[::-1])
+        B = process_block(B, reversed(range(round_count)), subkeys)
         #Write the block back
         plain[start_block : end_block] = B
+    print(plain)
     plain = pkcs7_strip(plain)
     return plain
 
@@ -117,7 +145,7 @@ def cbc_decrypt(plain, subkeys):
         end_block = start_block + 16
         #Grab the block
         PB = plain[start_block : end_block]
-        B = process_block(PB, reversed(range(round_count)), subkeys[::-1])
+        B = process_block(PB, reversed(range(round_count)), subkeys)
         #Xor the iv in
         B = [a ^ b for (a,b) in zip(B, prev)]
         #Save the resulting block as the "new" iv
@@ -155,7 +183,7 @@ def ctr_decrypt(plain, subkeys):
         #Grab the block
         B = plain[start_block : end_block]
         iv_block = bytearray((iv + i).to_bytes(16, sys.byteorder))
-        encrypted_block = process_block(iv_block, reversed(range(round_count)), subkeys[::-1])
+        encrypted_block = process_block(iv_block, reversed(range(round_count)), subkeys)
         #Xor the ciphertext in
         B = [a ^ b for (a,b) in zip(B, encrypted_block)]
         #Write the block back
@@ -170,13 +198,7 @@ if __name__ == '__main__':
         print("give me args!")
         sys.exit(1)
 
-    round_count = 8
-
-    #Master secret key
-    K = bytearray("yellow submarine", 'utf8')
-
-    #Subkey generation, not really lol
-    k = [K] * round_count
+    k = easy_subkey(K)
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
