@@ -1,6 +1,7 @@
 #!/bin/python3
 
 import sys
+import secrets
 
 def pkcs7_pad(x):
     padding = 16 - ((len(x) % 16 != 0) * (len(x) % 16))
@@ -48,7 +49,76 @@ def ecb_decrypt(plain, subkeys):
         end_block = start_block + 16
         #Grab the block
         B = plain[start_block : end_block]
-        B = process_block(B, reversed(range(round_count)), subkeys)
+        B = process_block(B, reversed(range(round_count)), subkeys[::-1])
+        #Write the block back
+        plain[start_block : end_block] = B
+    plain = pkcs7_strip(plain)
+    return plain
+
+def cbc_encrypt(plain, subkeys):
+    iv = bytearray(secrets.randbits(128).to_bytes(16, sys.byteorder))
+    plain = iv + plain
+    prev = iv
+    for i in range(1, len(plain) // 16):
+        start_block = i * 16
+        end_block = start_block + 16
+        #Grab the block
+        B = plain[start_block : end_block]
+        #Xor the iv in
+        B = [a ^ b for (a,b) in zip(B, prev)]
+        B = process_block(B, range(round_count), subkeys)
+        #Save the resulting block as the "new" iv
+        prev = B
+        #Write the block back
+        plain[start_block : end_block] = B
+    return plain
+
+def cbc_decrypt(plain, subkeys):
+    if len(plain) < 32:
+        raise ValueError('Input is not padded or does not contain an IV')
+    iv = plain[:16]
+    prev = iv
+    #i is block num
+    for i in range(1, len(plain) // 16):
+        start_block = i * 16
+        end_block = start_block + 16
+        #Grab the block
+        PB = plain[start_block : end_block]
+        B = process_block(PB, reversed(range(round_count)), subkeys[::-1])
+        #Xor the iv in
+        B = [a ^ b for (a,b) in zip(B, prev)]
+        #Save the resulting block as the "new" iv
+        prev = PB
+        #Write the block back
+        plain[start_block : end_block] = B
+    plain = pkcs7_strip(plain)
+    return plain[16:]
+
+def ctr_encrypt(plain, subkeys):
+    iv = bytearray(secrets.randbits(128).to_bytes(16, sys.byteorder))
+    #i is block num
+    for i in range(len(plain) // 16):
+        start_block = i * 16
+        end_block = start_block + 16
+        #Grab the block
+        B = plain[start_block : end_block]
+        B = process_block(B, range(round_count), subkeys)
+        #Write the block back
+        plain[start_block : end_block] = B
+    return plain
+
+def ctr_decrypt(plain, subkeys):
+    if len(plain) < 32:
+        raise ValueError('Input is not padded or does not contain an IV')
+    iv = plain[:16]
+    plain = plain[16:]
+    #i is block num
+    for i in range(len(plain) // 16):
+        start_block = i * 16
+        end_block = start_block + 16
+        #Grab the block
+        B = plain[start_block : end_block]
+        B = process_block(B, reversed(range(round_count)), subkeys[::-1])
         #Write the block back
         plain[start_block : end_block] = B
     plain = pkcs7_strip(plain)
@@ -71,13 +141,15 @@ if __name__ == '__main__':
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
-        P = ecb_encrypt(P, k);
+        #P = ecb_encrypt(P, k);
+        P = cbc_encrypt(P, k);
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
     else:
         P = bytearray(open(sys.argv[2], 'rb').read())
         if len(P) % 16 != 0:
             raise ValueError('Ciphertext is not a valid length, it must be corrupted')
-        P = ecb_decrypt(P, k)
+        #P = ecb_decrypt(P, k)
+        P = cbc_decrypt(P, k)
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
