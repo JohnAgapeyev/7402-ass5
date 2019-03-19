@@ -43,6 +43,8 @@ def medium(i, k, x):
         x[j] = x[j] ^ k[j]
         x[j] = rotate_byte(x[j], 3)
         x[j] = (x[j] + k[j+8]) & 0xff
+        for kb in k:
+            x[j] = rotate_byte(((x[j] ^ kb) + 0x3a) & 0xff, 7)
         random.Random(j).shuffle(x)
     random.Random(-i).shuffle(x)
     return x
