@@ -3,6 +3,8 @@
 import sys
 import secrets
 
+from Crypto.Cipher import AES
+
 def pkcs7_pad(x):
     padding = 16 - ((len(x) % 16 != 0) * (len(x) % 16))
     return x + bytes([padding]) * padding
@@ -14,14 +16,27 @@ def pkcs7_strip(x):
     return x[:-x[-1]]
 
 #This is completely arbitrary, and bad
-def f(i, k, x):
-    for elem in x:
-        elem *= i
-        elem <<= k
+def easy(i, k, x):
+    x = bytearray(x)
+    for j in range(len(x)):
+        x[j] = (x[j] * i) & 0xff
+        x[j] = (x[j] << k[i]) & 0xff
     return x
 
+#This is solidly amateur
+def medium(i, k, x):
+    x = bytearray(x)
+    for j in range(len(x)):
+        x[j] = (x[j] * i) & 0xff
+        x[j] = (x[j] << k[i]) & 0xff
+    return x
+
+#This is actually secure, just a waste of time
+def hard(i, k, x):
+    return bytearray(AES.new(k, AES.MODE_CTR, nonce=bytes([i])*8).encrypt(bytearray(x)))
+
 def round(i, k, L, R):
-    return R, [a ^ b for (a,b) in zip(L, f(i, k, R))]
+    return R, [a ^ b for (a,b) in zip(L, hard(i, k, R))]
 
 def process_block(B, rounds, subkeys):
     #Split the block
@@ -140,24 +155,24 @@ if __name__ == '__main__':
     round_count = 8
 
     #Master secret key
-    K = 7
+    K = bytearray("yellow submarine", 'utf8')
 
     #Subkey generation, not really lol
     k = [K] * round_count
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
-        #P = ecb_encrypt(P, k);
+        P = ecb_encrypt(P, k);
         #P = cbc_encrypt(P, k);
-        P = ctr_encrypt(P, k);
+        #P = ctr_encrypt(P, k);
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
     else:
         P = bytearray(open(sys.argv[2], 'rb').read())
         if len(P) % 16 != 0:
             raise ValueError('Ciphertext is not a valid length, it must be corrupted')
-        #P = ecb_decrypt(P, k)
+        P = ecb_decrypt(P, k)
         #P = cbc_decrypt(P, k)
-        P = ctr_decrypt(P, k)
+        #P = ctr_decrypt(P, k)
         with open(sys.argv[3], 'wb') as out:
             out.write(P)
