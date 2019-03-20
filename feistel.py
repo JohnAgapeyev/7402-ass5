@@ -215,10 +215,10 @@ if __name__ == '__main__':
             function is 'e' for encrypt, 'd' for decrypt, 't' for test
             mode is 'ecb' for ecb, 'cbc' for cbc, and 'ctr' for ctr
             quality is 'e' for easy, 'm' for medium, 'h' for hard''')
+        sys.exit(1)
 
     if len(sys.argv[1:]) != 5:
         print_help()
-        sys.exit(1)
 
     if sys.argv[2] == "ecb":
         encrypt_function = ecb_encrypt
@@ -248,7 +248,7 @@ if __name__ == '__main__':
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read()))
-        P = encrypt_function(P, k);
+        P = encrypt_function(P, k)
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
     elif sys.argv[1] == 'd':
@@ -259,6 +259,55 @@ if __name__ == '__main__':
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
     elif sys.argv[1] == 't':
-        pass
+        original = pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read()))
+
+        #this is the base test case
+        K = bytearray("yellow submarine", 'utf8')
+        k = subkey_generator(K)
+        encrypt = encrypt_function(bytearray(original), k)
+        #flip one bit in the key and reencrypt
+        K = bytearray("yellow sucmarine", 'utf8')
+        k = subkey_generator(K)
+        encrypt_key1 = encrypt_function(bytearray(original), k)
+
+        #how many preserved multi byte sequences are there
+        matches = []
+        for index, byte in enumerate(original):
+            if byte in encrypt:
+                start = encrypt.index(byte)
+                matching = 0
+                for i in range(index, len(original)):
+                    if original[i] == encrypt[i]:
+                        matching += 1
+                    else:
+                        break
+                    matches.append(matching)
+        average_match_len = sum(matches)/len(matches) if matches else 0
+
+
+        matches_key1 = []
+        for index, byte in enumerate(encrypt):
+            if byte in encrypt_key1:
+                start = encrypt_key1.index(byte)
+                matching = 0
+                for i in range(index, len(encrypt)):
+                    if encrypt[i] == encrypt_key1[i]:
+                        matching += 1
+                    else:
+                        break
+                    matches_key1.append(matching)
+        average_match_len_key1 = sum(matches_key1)/len(matches_key1) if matches_key1 else 0
+
+        print(f'''
+==>diffusion<==
+matches: {len(matches)}
+average match len: {average_match_len}
+==>confusion<==
+matches: {len(matches_key1)}
+average match len: {average_match_len_key1}
+''')
+
+        #with open(sys.argv[5], 'wb') as out:
+        #    out.write(P)
     else:
         print_help()
