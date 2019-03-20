@@ -168,8 +168,8 @@ def cbc_decrypt(plain, subkeys):
     plain = pkcs7_strip(plain)
     return plain[16:]
 
-def ctr_encrypt(plain, subkeys):
-    iv = secrets.randbits(128)
+def ctr_encrypt(plain, subkeys, iv=None):
+    iv = iv if iv else secrets.randbits(128)
     plain = bytearray(iv.to_bytes(16, sys.byteorder)) + plain
     #i is block num
     for i in range(1, len(plain) // 16):
@@ -183,7 +183,7 @@ def ctr_encrypt(plain, subkeys):
         B = bytearray([a ^ b for (a,b) in zip(B, encrypted_block)])
         #Write the block back
         plain[start_block : end_block] = B
-    return plain
+    return plain, iv
 
 def ctr_decrypt(plain, subkeys):
     if len(plain) < 32:
@@ -259,46 +259,51 @@ if __name__ == '__main__':
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
     elif sys.argv[1] == 't':
+        mode = sys.argv[2]
         original = pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read()))
 
         #this is the base test case
         K = bytearray("yellow submarine", 'utf8')
         k = subkey_generator(K)
-        encrypt = encrypt_function(bytearray(original), k)
+
+        #if there is an iv use it to seed the next call
+        encrypt = None
+        iv = None
+        if mode == 'ctr':
+            encrypt, iv = encrypt_function(bytearray(original), k)
+        else:
+            encrypt = encrypt_function(bytearray(original), k)
         #flip one bit in the key and reencrypt
         K = bytearray("yellow sucmarine", 'utf8')
         k = subkey_generator(K)
-        encrypt_key1 = encrypt_function(bytearray(original), k)
+
+        encrypt_key1 = None
+        if iv:
+            encrypt_key1 = encrypt_function(bytearray(original), k, iv)
+        else:
+            encrypt_key1 = encrypt_function(bytearray(original), k)
+
+        def matches_n_avg(base, compare):
+            matches = []
+            for index, byte in enumerate(base):
+                if byte in compare:
+                    start = compare.index(byte)
+                    matching = 0
+                    for i in range(index, len(base)):
+                        if base[i] == compare[i]:
+                            matching += 1
+                        else:
+                            break
+                        matches.append(matching)
+            average_match_len = sum(matches)/len(matches) if matches else 0
+            return matches, average_match_len
 
         #how many preserved multi byte sequences are there
-        matches = []
-        for index, byte in enumerate(original):
-            if byte in encrypt:
-                start = encrypt.index(byte)
-                matching = 0
-                for i in range(index, len(original)):
-                    if original[i] == encrypt[i]:
-                        matching += 1
-                    else:
-                        break
-                    matches.append(matching)
-        average_match_len = sum(matches)/len(matches) if matches else 0
+        matches, average_match_len = matches_n_avg(original, encrypt)
 
+        matches_key1, average_match_len_key1 = matches_n_avg(encrypt, encrypt_key1)
 
-        matches_key1 = []
-        for index, byte in enumerate(encrypt):
-            if byte in encrypt_key1:
-                start = encrypt_key1.index(byte)
-                matching = 0
-                for i in range(index, len(encrypt)):
-                    if encrypt[i] == encrypt_key1[i]:
-                        matching += 1
-                    else:
-                        break
-                    matches_key1.append(matching)
-        average_match_len_key1 = sum(matches_key1)/len(matches_key1) if matches_key1 else 0
-
-        print(f'''
+        print(f'''[{mode}]
 ==>diffusion<==
 matches: {len(matches)}
 average match len: {average_match_len}
