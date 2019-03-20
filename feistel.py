@@ -207,13 +207,17 @@ def ctr_decrypt(plain, subkeys):
 encrypt_function = ctr_encrypt
 decrypt_function = ctr_decrypt
 
-# Args are [function] [mode] [quality] [input filename] [output filename]
-# function is 'e' for encrypt, 'd' for decrypt
-# mode is 'ecb' for ecb, 'cbc' for cbc, and 'ctr' for ctr
-# quality is 'e' for easy, 'm' for medium, 'h' for hard
+
 if __name__ == '__main__':
+    def print_help():
+        print('''usage:
+    ./feistel.py [function] [mode] [quality] [input filename] [output filename]
+            function is 'e' for encrypt, 'd' for decrypt, 't' for test
+            mode is 'ecb' for ecb, 'cbc' for cbc, and 'ctr' for ctr
+            quality is 'e' for easy, 'm' for medium, 'h' for hard''')
+
     if len(sys.argv[1:]) != 5:
-        print("give me args!")
+        print_help()
         sys.exit(1)
 
     if sys.argv[2] == "ecb":
@@ -225,6 +229,8 @@ if __name__ == '__main__':
     elif sys.argv[2] == "ctr":
         encrypt_function = ctr_encrypt
         decrypt_function = ctr_decrypt
+    else:
+        print_help()
 
     if sys.argv[3] == 'e':
         subkey_generator = easy_subkey
@@ -235,6 +241,8 @@ if __name__ == '__main__':
     elif sys.argv[3] == 'h':
         subkey_generator = hard_subkey
         round_function = hard
+    else:
+        print_help()
 
     k = subkey_generator(K)
 
@@ -243,10 +251,14 @@ if __name__ == '__main__':
         P = encrypt_function(P, k);
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
-    else:
+    elif sys.argv[1] == 'd':
         P = bytearray(open(sys.argv[4], 'rb').read())
         if len(P) % 16 != 0:
             raise ValueError('Ciphertext is not a valid length, it must be corrupted')
         P = decrypt_function(P, k)
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
+    elif sys.argv[1] == 't':
+        pass
+    else:
+        print_help()
