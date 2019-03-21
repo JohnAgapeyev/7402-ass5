@@ -129,8 +129,8 @@ def ecb_decrypt(plain, subkeys):
     plain = pkcs7_strip(plain)
     return plain
 
-def cbc_encrypt(plain, subkeys):
-    iv = bytearray(secrets.randbits(128).to_bytes(16, sys.byteorder))
+def cbc_encrypt(plain, subkeys, iv=None):
+    iv = iv if iv else bytearray(secrets.randbits(128).to_bytes(16, sys.byteorder))
     plain = iv + plain
     prev = iv
     for i in range(1, len(plain) // 16):
@@ -145,7 +145,7 @@ def cbc_encrypt(plain, subkeys):
         prev = B
         #Write the block back
         plain[start_block : end_block] = B
-    return plain
+    return plain, iv
 
 def cbc_decrypt(plain, subkeys):
     if len(plain) < 32:
@@ -269,7 +269,7 @@ if __name__ == '__main__':
         #if there is an iv use it to seed the next call
         encrypt = None
         iv = None
-        if mode == 'ctr':
+        if mode in ['ctr','cbc']:
             encrypt, iv = encrypt_function(bytearray(original), k)
         else:
             encrypt = encrypt_function(bytearray(original), k)
