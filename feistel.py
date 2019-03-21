@@ -207,7 +207,60 @@ def ctr_decrypt(plain, subkeys):
 encrypt_function = ctr_encrypt
 decrypt_function = ctr_decrypt
 
+def run_test(mode, data):
+    original = data
 
+    #this is the base test case
+    K = bytearray("yellow submarine", 'utf8')
+    k = subkey_generator(K)
+
+    #if there is an iv use it to seed the next call
+    encrypt = None
+    iv = None
+    if mode in ['ctr','cbc']:
+        encrypt, iv = encrypt_function(bytearray(original), k)
+    else:
+        encrypt = encrypt_function(bytearray(original), k)
+    #flip one bit in the key and reencrypt
+    K = bytearray("yellow sucmarine", 'utf8')
+    k = subkey_generator(K)
+
+    encrypt_key1 = None
+    if iv:
+        encrypt_key1 = encrypt_function(bytearray(original), k, iv)
+    else:
+        encrypt_key1 = encrypt_function(bytearray(original), k)
+
+    def m1_n_avg(base, compare):
+        m1 = []
+        for index, byte in enumerate(base):
+            if byte in compare:
+                start = compare.index(byte)
+                matching = 0
+                for i in range(index, len(base)):
+                    if base[i] == compare[i]:
+                        matching += 1
+                    else:
+                        break
+                    m1.append(matching)
+        aml1 = sum(m1)/len(m1) if m1 else 0
+        return m1, aml1
+
+    #how many preserved multi byte sequences are there
+    m1, aml1 = m1_n_avg(original, encrypt)
+
+    m2, aml2 = m1_n_avg(encrypt, encrypt_key1)
+
+    return m1, aml1, m2, aml2
+
+funcmap ={
+    "ecb":(ecb_encrypt, ecb_decrypt),
+    "ctr":(ctr_encrypt, ctr_decrypt),
+    "cbc":(cbc_encrypt, cbc_decrypt),
+    "e":(easy_subkey, easy),
+    "m":(medium_subkey, medium),
+    "h":(hard_subkey, hard)
+}
 if __name__ == '__main__':
     def print_help():
         print('''usage:
@@ -217,30 +270,33 @@ if __name__ == '__main__':
             quality is 'e' for easy, 'm' for medium, 'h' for hard''')
         sys.exit(1)
 
+    if sys.argv[1] == 't' and len(sys.argv) == 3:
+        data = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
+        for mode in ['cbc', 'ecb', 'ctr']:
+            for diff in ['e', 'm', 'h']:
+                encrypt_function, decrypt_function = funcmap[mode]
+                subkey_generator, round_function = funcmap[diff]
+                m1, aml1, m2, aml2 = run_test(mode, bytearray(data))
+                print(f'''
+__/{mode} {diff}\__
+==>diffusion<==
+matches: {len(m1)}
+average match len: {aml1}
+==>confusion<==
+matches: {len(m2)}
+average match len: {aml2}
+''')
+        sys.exit(0)
     if len(sys.argv[1:]) != 5:
         print_help()
 
-    if sys.argv[2] == "ecb":
-        encrypt_function = ecb_encrypt
-        decrypt_function = ecb_decrypt
-    elif sys.argv[2] == "cbc":
-        encrypt_function = cbc_encrypt
-        decrypt_function = cbc_decrypt
-    elif sys.argv[2] == "ctr":
-        encrypt_function = ctr_encrypt
-        decrypt_function = ctr_decrypt
+    if sys.argv[2] in funcmap:
+        encrypt_function, decrypt_function = funcmap[sys.argv[2]]
     else:
         print_help()
 
-    if sys.argv[3] == 'e':
-        subkey_generator = easy_subkey
-        round_function = easy
-    elif sys.argv[3] == 'm':
-        subkey_generator = medium_subkey
-        round_function = medium
-    elif sys.argv[3] == 'h':
-        subkey_generator = hard_subkey
-        round_function = hard
+    if sys.argv[3] in funcmap:
+        subkey_generator, round_function = funcmap[sys.argv[3]]
     else:
         print_help()
 
@@ -258,63 +314,5 @@ if __name__ == '__main__':
         P = decrypt_function(P, k)
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
-    elif sys.argv[1] == 't':
-        def run_test(mode, data, encrypt_function):
-            original = data
-
-            #this is the base test case
-            K = bytearray("yellow submarine", 'utf8')
-            k = subkey_generator(K)
-
-            #if there is an iv use it to seed the next call
-            encrypt = None
-            iv = None
-            if mode in ['ctr','cbc']:
-                encrypt, iv = encrypt_function(bytearray(original), k)
-            else:
-                encrypt = encrypt_function(bytearray(original), k)
-            #flip one bit in the key and reencrypt
-            K = bytearray("yellow sucmarine", 'utf8')
-            k = subkey_generator(K)
-
-            encrypt_key1 = None
-            if iv:
-                encrypt_key1 = encrypt_function(bytearray(original), k, iv)
-            else:
-                encrypt_key1 = encrypt_function(bytearray(original), k)
-
-            def m1_n_avg(base, compare):
-                m1 = []
-                for index, byte in enumerate(base):
-                    if byte in compare:
-                        start = compare.index(byte)
-                        matching = 0
-                        for i in range(index, len(base)):
-                            if base[i] == compare[i]:
-                                matching += 1
-                            else:
-                                break
-                            m1.append(matching)
-                aml1 = sum(m1)/len(m1) if m1 else 0
-                return m1, aml1
-
-            #how many preserved multi byte sequences are there
-            m1, aml1 = m1_n_avg(original, encrypt)
-
-            m2, aml2 = m1_n_avg(encrypt, encrypt_key1)
-
-            return m1, aml1, m2, aml2
-
-        m1, aml1, m2, aml2 = run_test(sys.argv[2], pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read())), encrypt_function)
-        print(f'''==>diffusion<==
-matches: {len(m1)}
-average match len: {aml1}
-==>confusion<==
-matches: {len(m2)}
-average match len: {aml2}
-''')
-
-        #with open(sys.argv[5], 'wb') as out:
-        #    out.write(P)
     else:
         print_help()
