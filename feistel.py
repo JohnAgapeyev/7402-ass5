@@ -270,6 +270,8 @@ if __name__ == '__main__':
             mode is 'ecb' for ecb, 'cbc' for cbc, and 'ctr' for ctr
             quality is 'e' for easy, 'm' for medium, 'h' for hard''')
         sys.exit(1)
+    if len(sys.argv) == 1:
+        print_help()
 
     if sys.argv[1] == 't' and len(sys.argv) == 3:
         data = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
