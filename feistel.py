@@ -4,6 +4,7 @@ import sys
 import secrets
 import random
 import matplotlib.pyplot as plt
+import numpy as np
 
 from Crypto.Cipher import AES
 from Crypto.Hash import HMAC
@@ -304,16 +305,21 @@ average match len: {aml2}
 ''')
         plt.style.use('dark_background')
 
+        ind = np.arange(9)
         sp = plt.subplot(2,1,1)
         plt.title("Matches Per Mode")
-        pm1 = plt.bar(names, ms, log=True, label='Confusion')
-        pm2 = plt.bar(names, ms2, log=True, label='Diffusion')
+        pm1 = plt.bar(ind, ms2, width=0.5, log=True, label='Diffusion')
+        pm2 = plt.bar(ind+0.5, ms, width=0.5, log=True, label='Confusion')
+        sp.set_xticks(ind+0.5)
+        sp.set_xticklabels(names)
         plt.legend([pm1, pm2], ['Confusion', 'Diffusion'])
 
         sp2 = plt.subplot(2,1,2)
         plt.title("Average Match Length")
-        pl1 = plt.bar(names, mks, log=True, label='Confusion')
-        pl2 = plt.bar(names, mks2, log=True, label='Diffusion')
+        pl1 = plt.bar(ind, mks2, width=0.5, log=True, label='Diffusion')
+        pl2 = plt.bar(ind+0.5, mks, width=0.5, log=True, label='Confusion')
+        sp2.set_xticks(ind+0.5)
+        sp2.set_xticklabels(names)
         plt.legend([pl1, pl2], ['Confusion', 'Diffusion'])
 
         plt.show()
