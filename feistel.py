@@ -259,57 +259,59 @@ if __name__ == '__main__':
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
     elif sys.argv[1] == 't':
-        mode = sys.argv[2]
-        original = pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read()))
+        def run_test(mode, data, encrypt_function):
+            original = data
 
-        #this is the base test case
-        K = bytearray("yellow submarine", 'utf8')
-        k = subkey_generator(K)
+            #this is the base test case
+            K = bytearray("yellow submarine", 'utf8')
+            k = subkey_generator(K)
 
-        #if there is an iv use it to seed the next call
-        encrypt = None
-        iv = None
-        if mode in ['ctr','cbc']:
-            encrypt, iv = encrypt_function(bytearray(original), k)
-        else:
-            encrypt = encrypt_function(bytearray(original), k)
-        #flip one bit in the key and reencrypt
-        K = bytearray("yellow sucmarine", 'utf8')
-        k = subkey_generator(K)
+            #if there is an iv use it to seed the next call
+            encrypt = None
+            iv = None
+            if mode in ['ctr','cbc']:
+                encrypt, iv = encrypt_function(bytearray(original), k)
+            else:
+                encrypt = encrypt_function(bytearray(original), k)
+            #flip one bit in the key and reencrypt
+            K = bytearray("yellow sucmarine", 'utf8')
+            k = subkey_generator(K)
 
-        encrypt_key1 = None
-        if iv:
-            encrypt_key1 = encrypt_function(bytearray(original), k, iv)
-        else:
-            encrypt_key1 = encrypt_function(bytearray(original), k)
+            encrypt_key1 = None
+            if iv:
+                encrypt_key1 = encrypt_function(bytearray(original), k, iv)
+            else:
+                encrypt_key1 = encrypt_function(bytearray(original), k)
 
-        def matches_n_avg(base, compare):
-            matches = []
-            for index, byte in enumerate(base):
-                if byte in compare:
-                    start = compare.index(byte)
-                    matching = 0
-                    for i in range(index, len(base)):
-                        if base[i] == compare[i]:
-                            matching += 1
-                        else:
-                            break
-                        matches.append(matching)
-            average_match_len = sum(matches)/len(matches) if matches else 0
-            return matches, average_match_len
+            def m1_n_avg(base, compare):
+                m1 = []
+                for index, byte in enumerate(base):
+                    if byte in compare:
+                        start = compare.index(byte)
+                        matching = 0
+                        for i in range(index, len(base)):
+                            if base[i] == compare[i]:
+                                matching += 1
+                            else:
+                                break
+                            m1.append(matching)
+                aml1 = sum(m1)/len(m1) if m1 else 0
+                return m1, aml1
 
-        #how many preserved multi byte sequences are there
-        matches, average_match_len = matches_n_avg(original, encrypt)
+            #how many preserved multi byte sequences are there
+            m1, aml1 = m1_n_avg(original, encrypt)
 
-        matches_key1, average_match_len_key1 = matches_n_avg(encrypt, encrypt_key1)
+            m2, aml2 = m1_n_avg(encrypt, encrypt_key1)
 
-        print(f'''[{mode}]
-==>diffusion<==
-matches: {len(matches)}
-average match len: {average_match_len}
+            return m1, aml1, m2, aml2
+
+        m1, aml1, m2, aml2 = run_test(sys.argv[2], pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read())), encrypt_function)
+        print(f'''==>diffusion<==
+matches: {len(m1)}
+average match len: {aml1}
 ==>confusion<==
-matches: {len(matches_key1)}
-average match len: {average_match_len_key1}
+matches: {len(m2)}
+average match len: {aml2}
 ''')
 
         #with open(sys.argv[5], 'wb') as out:
