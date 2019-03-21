@@ -3,6 +3,7 @@
 import sys
 import secrets
 import random
+import matplotlib.pyplot as plt
 
 from Crypto.Cipher import AES
 from Crypto.Hash import HMAC
@@ -272,11 +273,21 @@ if __name__ == '__main__':
 
     if sys.argv[1] == 't' and len(sys.argv) == 3:
         data = pkcs7_pad(bytearray(open(sys.argv[2], 'rb').read()))
-        for mode in ['cbc', 'ecb', 'ctr']:
+        ms = []
+        mks = []
+        ms2 = []
+        mks2 = []
+        names=[]
+        for mode in ['ecb', 'ctr', 'cbc']:
             for diff in ['e', 'm', 'h']:
                 encrypt_function, decrypt_function = funcmap[mode]
                 subkey_generator, round_function = funcmap[diff]
                 m1, aml1, m2, aml2 = run_test(mode, bytearray(data))
+                ms.append(len(m1))
+                mks.append(aml1)
+                ms2.append(len(m2))
+                mks2.append(aml2)
+                names.append(f'{mode}:{diff}')
                 print(f'''
 __/{mode} {diff}\__
 ==>diffusion<==
@@ -286,6 +297,22 @@ average match len: {aml1}
 matches: {len(m2)}
 average match len: {aml2}
 ''')
+        plt.style.use('dark_background')
+
+        sp = plt.subplot(2,1,1)
+        plt.title("Matches Per Mode")
+        pm1 = plt.bar(names, ms, log=True, label='Confusion')
+        pm2 = plt.bar(names, ms2, log=True, label='Diffusion')
+        plt.legend([pm1, pm2], ['Confusion', 'Diffusion'])
+
+        sp2 = plt.subplot(2,1,2)
+        plt.title("Average Match Length")
+        pl1 = plt.bar(names, mks, log=True, label='Confusion')
+        pl2 = plt.bar(names, mks2, log=True, label='Diffusion')
+        plt.legend([pl1, pl2], ['Confusion', 'Diffusion'])
+
+        plt.show()
+
         sys.exit(0)
     if len(sys.argv[1:]) != 5:
         print_help()
