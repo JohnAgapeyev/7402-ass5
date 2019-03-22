@@ -342,7 +342,10 @@ average match len: {aml2}
 
     if sys.argv[1] == 'e':
         P = pkcs7_pad(bytearray(open(sys.argv[4], 'rb').read()))
-        P = encrypt_function(P, k)
+        if sys.argv[2] in 'cbcctr':
+            P = encrypt_function(P, k)[0]
+        else:
+            P = encrypt_function(P, k)
         with open(sys.argv[5], 'wb') as out:
             out.write(P)
     elif sys.argv[1] == 'd':
